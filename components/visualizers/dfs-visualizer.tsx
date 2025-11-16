@@ -1,13 +1,13 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { RotateCcw, Play } from "lucide-react"
 
 interface Node {
   id: string
   x: number
   y: number
-  state: "unvisited" | "visiting" | "visited" | "current"
+  state: "unvisited" | "current" | "visited"
 }
 
 interface Edge {
@@ -18,13 +18,15 @@ interface Edge {
 export function DFSVisualizer() {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
-  const [isRunning, setIsRunning] = useState(false)
   const [visitedOrder, setVisitedOrder] = useState<string[]>([])
-  const [speed, setSpeed] = useState(100)
-  const [currentNode, setCurrentNode] = useState<string | null>(null)
   const [steps, setSteps] = useState(0)
+  const [speed, setSpeed] = useState(50)
 
-  // Initialize graph
+  const isRunningRef = useRef(false)
+
+  // --------------------------------------------
+  // Initialize Graph
+  // --------------------------------------------
   useEffect(() => {
     const graphNodes: Node[] = [
       { id: "A", x: 100, y: 100, state: "unvisited" },
@@ -32,10 +34,10 @@ export function DFSVisualizer() {
       { id: "C", x: 400, y: 100, state: "unvisited" },
       { id: "D", x: 170, y: 220, state: "unvisited" },
       { id: "E", x: 330, y: 220, state: "unvisited" },
-      { id: "F", x: 250, y: 320, state: "unvisited" },
+      { id: "F", x: 250, y: 340, state: "unvisited" },
     ]
 
-    const originalEdges: Edge[] = [
+    const directedEdges: Edge[] = [
       { from: "A", to: "B" },
       { from: "A", to: "D" },
       { from: "B", to: "C" },
@@ -44,18 +46,23 @@ export function DFSVisualizer() {
       { from: "E", to: "F" },
     ]
 
-    // Convert to undirected (add reverse edges)
-    const undirectedEdges = [
-      ...originalEdges,
-      ...originalEdges.map(e => ({ from: e.to, to: e.from }))
+    // Convert directed to undirected
+    const undirected = [
+      ...directedEdges,
+      ...directedEdges.map(e => ({ from: e.to, to: e.from })),
     ]
 
     setNodes(graphNodes)
-    setEdges(undirectedEdges)
+    setEdges(undirected)
   }, [])
 
+  const wait = (ms: number) => new Promise((res) => setTimeout(res, ms))
+
+  // --------------------------------------------
+  // DFS Function
+  // --------------------------------------------
   const performDFS = async () => {
-    setIsRunning(true)
+    isRunningRef.current = true
     setVisitedOrder([])
     setSteps(0)
 
@@ -65,12 +72,12 @@ export function DFSVisualizer() {
     const animationDelay = 200 - speed * 1.95
 
     const dfs = async (nodeId: string) => {
+      if (!isRunningRef.current) return
       if (visited.has(nodeId)) return
 
       visited.add(nodeId)
       order.push(nodeId)
       setVisitedOrder([...order])
-      setCurrentNode(nodeId)
       setSteps(++stepCount)
 
       setNodes(prev =>
@@ -83,7 +90,7 @@ export function DFSVisualizer() {
         )
       )
 
-      await new Promise(res => setTimeout(res, animationDelay))
+      await wait(animationDelay)
 
       const neighbors = edges
         .filter(e => e.from === nodeId)
@@ -91,32 +98,35 @@ export function DFSVisualizer() {
         .filter(nei => !visited.has(nei))
 
       for (const nei of neighbors) {
-        if (!isRunning) return
+        if (!isRunningRef.current) return
         await dfs(nei)
       }
 
-      // Mark as visited
       setNodes(prev =>
-        prev.map(n => (n.id === nodeId ? { ...n, state: "visited" } : n))
+        prev.map(n =>
+          n.id === nodeId ? { ...n, state: "visited" } : n
+        )
       )
     }
 
     await dfs("A")
-    setCurrentNode(null)
-    setIsRunning(false)
+    isRunningRef.current = false
   }
 
-  const resetVisualization = () => {
-    setNodes(prev => prev.map(n => ({ ...n, state: "unvisited" })))
+  const reset = () => {
+    isRunningRef.current = false
     setVisitedOrder([])
-    setCurrentNode(null)
     setSteps(0)
-    setIsRunning(false)
+    setNodes(prev => prev.map(n => ({ ...n, state: "unvisited" })))
   }
 
+  // --------------------------------------------
+  // UI
+  // --------------------------------------------
   return (
-    <div className="w-full space-y-6">
-      {/* Speed Control */}
+    <div className="space-y-6">
+
+      {/* Speed */}
       <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
         <label className="text-sm font-medium">Speed: {speed}%</label>
         <input
@@ -125,34 +135,38 @@ export function DFSVisualizer() {
           max="100"
           value={speed}
           onChange={(e) => setSpeed(Number(e.target.value))}
-          disabled={isRunning}
           className="flex-1 accent-red-500"
         />
       </div>
 
-      {/* Graph SVG */}
-      <svg className="w-full border rounded-lg bg-background" height="400">
+      {/* SVG GRAPH */}
+      <svg
+        className="w-full border rounded-lg bg-white"
+        viewBox="0 0 500 450"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: "100%", height: "450px" }}
+      >
         {/* Edges */}
         {edges.map((edge, i) => {
-          const fromNode = nodes.find(n => n.id === edge.from)
-          const toNode = nodes.find(n => n.id === edge.to)
-          if (!fromNode || !toNode) return null
+          const from = nodes.find((n) => n.id === edge.from)
+          const to = nodes.find((n) => n.id === edge.to)
+          if (!from || !to) return null
 
           return (
             <line
               key={i}
-              x1={fromNode.x}
-              y1={fromNode.y}
-              x2={toNode.x}
-              y2={toNode.y}
-              stroke="#64748b"
-              strokeWidth="2"
+              x1={from.x}
+              y1={from.y}
+              x2={to.x}
+              y2={to.y}
+              stroke="#94a3b8"
+              strokeWidth={2}
             />
           )
         })}
 
         {/* Nodes */}
-        {nodes.map(node => (
+        {nodes.map((node) => (
           <g key={node.id}>
             <circle
               cx={node.x}
@@ -165,23 +179,22 @@ export function DFSVisualizer() {
                   ? "#10b981"
                   : "#e2e8f0"
               }
-              stroke={node.state === "current" ? "#f97316" : "#64748b"}
+              stroke="#475569"
               strokeWidth="2"
               style={{
-                transition: "all 0.3s ease",
+                transition: "0.25s",
                 filter:
                   node.state === "current"
-                    ? "drop-shadow(0 0 12px rgba(245, 158, 11, 0.8))"
+                    ? "drop-shadow(0 0 12px rgba(245, 158, 11, 0.9))"
                     : "none",
               }}
             />
             <text
               x={node.x}
               y={node.y}
+              dy="0.35em"
               textAnchor="middle"
-              dy="0.3em"
-              className="font-bold text-sm"
-              fill="#1e293b"
+              className="font-bold"
             >
               {node.id}
             </text>
@@ -189,16 +202,16 @@ export function DFSVisualizer() {
         ))}
       </svg>
 
-      {/* Visitation Order */}
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Visitation Order</label>
-        <div className="flex flex-wrap gap-2">
-          {visitedOrder.map((nodeId, i) => (
+      {/* Visitation */}
+      <div>
+        <label className="font-medium text-sm">Visitation Order</label>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {visitedOrder.map((n, i) => (
             <div
               key={i}
-              className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm font-medium"
+              className="px-3 py-1 bg-primary text-primary-foreground rounded-full"
             >
-              {i + 1}. {nodeId}
+              {i + 1}. {n}
             </div>
           ))}
         </div>
@@ -220,17 +233,15 @@ export function DFSVisualizer() {
       <div className="flex justify-center gap-3">
         <button
           onClick={performDFS}
-          disabled={isRunning}
-          className="px-6 py-2 bg-primary text-primary-foreground rounded-lg flex items-center gap-2"
+          className="px-6 py-2 bg-primary text-white rounded-lg flex items-center gap-2"
         >
           <Play className="w-4 h-4" />
-          {isRunning ? "Running..." : "Start DFS"}
+          Start DFS
         </button>
 
         <button
-          onClick={resetVisualization}
-          disabled={isRunning}
-          className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg flex items-center gap-2"
+          onClick={reset}
+          className="px-6 py-2 bg-secondary rounded-lg flex items-center gap-2"
         >
           <RotateCcw className="w-4 h-4" />
           Reset

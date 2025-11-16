@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { RotateCcw, Play } from "lucide-react"
 
 interface Node {
@@ -18,24 +18,27 @@ interface Edge {
 export function BFSVisualizer() {
   const [nodes, setNodes] = useState<Node[]>([])
   const [edges, setEdges] = useState<Edge[]>([])
-  const [isRunning, setIsRunning] = useState(false)
   const [visitedOrder, setVisitedOrder] = useState<string[]>([])
-  const [speed, setSpeed] = useState(100)
-  const [currentNode, setCurrentNode] = useState<string | null>(null)
-  const [queue, setQueue] = useState<string[]>([])
+  const [queueState, setQueueState] = useState<string[]>([])
   const [steps, setSteps] = useState(0)
+  const [speed, setSpeed] = useState(50)
 
+  const isRunningRef = useRef(false)
+
+  // --------------------------------------------
+  // INIT GRAPH
+  // --------------------------------------------
   useEffect(() => {
-    const graphData: Node[] = [
+    const graphNodes: Node[] = [
       { id: "A", x: 100, y: 100, state: "unvisited" },
       { id: "B", x: 250, y: 80, state: "unvisited" },
       { id: "C", x: 400, y: 100, state: "unvisited" },
       { id: "D", x: 170, y: 220, state: "unvisited" },
       { id: "E", x: 330, y: 220, state: "unvisited" },
-      { id: "F", x: 250, y: 320, state: "unvisited" },
+      { id: "F", x: 250, y: 340, state: "unvisited" },
     ]
 
-    const graphEdges: Edge[] = [
+    const directedEdges: Edge[] = [
       { from: "A", to: "B" },
       { from: "A", to: "D" },
       { from: "B", to: "C" },
@@ -44,80 +47,110 @@ export function BFSVisualizer() {
       { from: "E", to: "F" },
     ]
 
-    setNodes(graphData)
-    setEdges(graphEdges)
+    const undirected = [
+      ...directedEdges,
+      ...directedEdges.map(e => ({ from: e.to, to: e.from }))
+    ]
+
+    setNodes(graphNodes)
+    setEdges(undirected)
   }, [])
 
+  const wait = (ms: number) => new Promise(res => setTimeout(res, ms))
+
+  // --------------------------------------------
+  // BFS LOGIC
+  // --------------------------------------------
   const performBFS = async () => {
-    setIsRunning(true)
+    isRunningRef.current = true
     setVisitedOrder([])
-    setQueue([])
+    setQueueState([])
     setSteps(0)
-    let stepCount = 0
-    const animationDelay = 200 - speed * 1.95
 
     const visited = new Set<string>()
     const queue: string[] = ["A"]
-    const order: string[] = []
     visited.add("A")
 
+    const order: string[] = []
+    let stepCount = 0
+
+    const animationDelay = 200 - speed * 1.95
+
+    // mark initial queue
+    setQueueState([...queue])
+
     while (queue.length > 0) {
-      if (!isRunning) return
+      if (!isRunningRef.current) return
 
       const nodeId = queue.shift()!
       order.push(nodeId)
+
       setVisitedOrder([...order])
-      setCurrentNode(nodeId)
-      setQueue([...queue])
       setSteps(++stepCount)
 
-      setNodes((prev) =>
-        prev.map((n) =>
+      setNodes(prev =>
+        prev.map(n =>
           n.id === nodeId
             ? { ...n, state: "current" }
+            : visited.has(n.id)
+            ? { ...n, state: "visited" }
             : queue.includes(n.id)
-              ? { ...n, state: "queued" }
-              : visited.has(n.id)
-                ? { ...n, state: "visited" }
-                : n,
-        ),
+            ? { ...n, state: "queued" }
+            : n
+        )
       )
 
-      await new Promise((resolve) => setTimeout(resolve, animationDelay))
+      await wait(animationDelay)
 
       const neighbors = edges
-        .filter((e) => e.from === nodeId)
-        .map((e) => e.to)
-        .filter((id) => !visited.has(id))
+        .filter(e => e.from === nodeId)
+        .map(e => e.to)
+        .filter(nei => !visited.has(nei))
 
-      for (const neighbor of neighbors) {
-        visited.add(neighbor)
-        queue.push(neighbor)
+      for (const nei of neighbors) {
+        visited.add(nei)
+        queue.push(nei)
 
-        setNodes((prev) => prev.map((n) => (n.id === neighbor ? { ...n, state: "queued" } : n)))
+        setNodes(prev =>
+          prev.map(n =>
+            n.id === nei ? { ...n, state: "queued" } : n
+          )
+        )
       }
 
-      setQueue([...queue])
-      setNodes((prev) => prev.map((n) => (n.id === nodeId ? { ...n, state: "visited" } : n)))
-      await new Promise((resolve) => setTimeout(resolve, animationDelay / 2))
+      setQueueState([...queue])
+
+      setNodes(prev =>
+        prev.map(n =>
+          n.id === nodeId ? { ...n, state: "visited" } : n
+        )
+      )
+
+      await wait(animationDelay / 2)
     }
 
-    setCurrentNode(null)
-    setQueue([])
-    setIsRunning(false)
+    isRunningRef.current = false
+    setQueueState([])
   }
 
-  const resetVisualization = () => {
-    setNodes((prev) => prev.map((n) => ({ ...n, state: "unvisited" })))
+  // --------------------------------------------
+  // RESET
+  // --------------------------------------------
+  const reset = () => {
+    isRunningRef.current = false
     setVisitedOrder([])
-    setCurrentNode(null)
-    setQueue([])
+    setQueueState([])
     setSteps(0)
-    setIsRunning(false)
+    setNodes(prev => prev.map(n => ({ ...n, state: "unvisited" })))
   }
 
+  // --------------------------------------------
+  // UI
+  // --------------------------------------------
   return (
-    <div className="w-full space-y-6">
+    <div className="space-y-6">
+
+      {/* SPEED */}
       <div className="flex items-center gap-4 p-4 bg-muted rounded-lg">
         <label className="text-sm font-medium">Speed: {speed}%</label>
         <input
@@ -126,31 +159,36 @@ export function BFSVisualizer() {
           max="100"
           value={speed}
           onChange={(e) => setSpeed(Number(e.target.value))}
-          disabled={isRunning}
-          className="flex-1"
+          className="flex-1 accent-red-500"
         />
       </div>
 
-      <svg className="w-full border rounded-lg bg-background" height="400" style={{ minHeight: "400px" }}>
+      {/* GRAPH */}
+      <svg
+        className="w-full border rounded-lg bg-background"
+        viewBox="0 0 500 450"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ width: "100%", height: "450px" }}
+      >
         {edges.map((edge, i) => {
-          const fromNode = nodes.find((n) => n.id === edge.from)
-          const toNode = nodes.find((n) => n.id === edge.to)
-          if (!fromNode || !toNode) return null
+          const from = nodes.find(n => n.id === edge.from)
+          const to = nodes.find(n => n.id === edge.to)
+          if (!from || !to) return null
 
           return (
             <line
               key={i}
-              x1={fromNode.x}
-              y1={fromNode.y}
-              x2={toNode.x}
-              y2={toNode.y}
-              stroke="#64748b"
-              strokeWidth="2"
+              x1={from.x}
+              y1={from.y}
+              x2={to.x}
+              y2={to.y}
+              stroke="#94a3b8"
+              strokeWidth={2}
             />
           )
         })}
 
-        {nodes.map((node) => (
+        {nodes.map(node => (
           <g key={node.id}>
             <circle
               cx={node.x}
@@ -160,51 +198,68 @@ export function BFSVisualizer() {
                 node.state === "current"
                   ? "#f59e0b"
                   : node.state === "queued"
-                    ? "#06b6d4"
-                    : node.state === "visited"
-                      ? "#10b981"
-                      : "#e2e8f0"
+                  ? "#06b6d4"
+                  : node.state === "visited"
+                  ? "#10b981"
+                  : "#e2e8f0"
               }
-              stroke={node.state === "current" ? "#f97316" : "#64748b"}
+              stroke="#475569"
               strokeWidth="2"
               style={{
-                transition: "all 0.3s ease",
-                filter: node.state === "current" ? "drop-shadow(0 0 10px rgba(245, 158, 11, 0.8))" : "none",
+                transition: "0.25s",
+                filter:
+                  node.state === "current"
+                    ? "drop-shadow(0 0 12px rgba(245, 158, 11, 0.9))"
+                    : "none"
               }}
             />
-            <text x={node.x} y={node.y} textAnchor="middle" dy="0.3em" className="font-bold text-sm" fill="#1e293b">
+            <text
+              x={node.x}
+              y={node.y}
+              dy="0.35em"
+              textAnchor="middle"
+              className="font-bold"
+            >
               {node.id}
             </text>
           </g>
         ))}
       </svg>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Queue</label>
-        <div className="flex gap-2 p-3 bg-muted rounded-lg min-h-10">
-          {queue.length === 0 ? (
-            <span className="text-muted-foreground text-sm">Empty</span>
-          ) : (
-            queue.map((nodeId, i) => (
-              <div key={i} className="px-3 py-1 bg-cyan-500 text-white rounded text-sm font-medium">
-                {nodeId}
-              </div>
-            ))
-          )}
+      {/* QUEUE */}
+      <div>
+        <label className="font-medium text-sm">Queue</label>
+        <div className="flex flex-wrap gap-2 mt-2 p-2 bg-muted rounded-lg min-h-10">
+          {queueState.length === 0
+            ? <span className="text-muted-foreground text-sm">Empty</span>
+            : queueState.map((n, i) => (
+                <span
+                  key={i}
+                  className="px-3 py-1 bg-cyan-500 text-white rounded-lg"
+                >
+                  {n}
+                </span>
+              ))
+          }
         </div>
       </div>
 
-      <div className="space-y-2">
-        <label className="text-sm font-medium">Visitation Order</label>
-        <div className="flex flex-wrap gap-2">
-          {visitedOrder.map((nodeId, i) => (
-            <div key={i} className="px-3 py-1 bg-primary text-primary-foreground rounded-full text-sm font-medium">
-              {i + 1}. {nodeId}
-            </div>
+      {/* VISITATION ORDER */}
+      <div>
+        <label className="font-medium text-sm">Visitation Order</label>
+        <div className="flex flex-wrap gap-2 mt-2">
+          {visitedOrder.map((n, i) => (
+            <span
+              key={i}
+              className="px-3 py-1 bg-primary text-primary-foreground rounded-full"
+            >
+              {i + 1}. {n}
+            </span>
           ))}
         </div>
       </div>
 
+      {/* STATS */}
       <div className="grid grid-cols-2 gap-4">
         <div className="p-3 bg-muted rounded-lg">
           <div className="text-xs text-muted-foreground">Steps</div>
@@ -216,19 +271,19 @@ export function BFSVisualizer() {
         </div>
       </div>
 
+      {/* BUTTONS */}
       <div className="flex justify-center gap-3">
         <button
           onClick={performBFS}
-          disabled={isRunning}
-          className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50 flex items-center gap-2"
+          className="px-6 py-2 bg-primary text-white rounded-lg flex items-center gap-2"
         >
           <Play className="w-4 h-4" />
-          {isRunning ? "Running..." : "Start BFS"}
+          Start BFS
         </button>
+
         <button
-          onClick={resetVisualization}
-          disabled={isRunning}
-          className="px-6 py-2 bg-secondary text-secondary-foreground rounded-lg hover:bg-secondary/90 disabled:opacity-50 flex items-center gap-2"
+          onClick={reset}
+          className="px-6 py-2 bg-secondary rounded-lg flex items-center gap-2"
         >
           <RotateCcw className="w-4 h-4" />
           Reset
