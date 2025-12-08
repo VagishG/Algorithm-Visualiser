@@ -71,75 +71,7 @@ export function AlgorithmVisualization({ algorithmId }: AlgorithmVisualizationPr
       </div>
 
       {/* Controls */}
-      <div className="space-y-4 pt-2 border-t border-border">
-        {/* Primary Controls */}
-        <div className="flex gap-2 flex-wrap">
-          <Button
-            variant={isPlaying ? "default" : "outline"}
-            size="sm"
-            onClick={() => step(isPlaying ? "pause" : "play")}
-            className="gap-2"
-          >
-            {isPlaying ? (
-              <>
-                <Pause className="w-4 h-4" />
-                Pause
-              </>
-            ) : (
-              <>
-                <Play className="w-4 h-4" />
-                Play
-              </>
-            )}
-          </Button>
-          <Button variant="outline" size="sm" onClick={() => step("next")} className="gap-2" disabled={isPlaying}>
-            <StepForward className="w-4 h-4" />
-            Step
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleReset} className="gap-2 bg-transparent">
-            <RotateCcw className="w-4 h-4" />
-            Reset
-          </Button>
-        </div>
 
-        {/* Speed Control */}
-        <div className="flex items-center gap-4 pt-2">
-          <span className="text-xs font-semibold text-foreground uppercase tracking-wide">Speed</span>
-          <div className="flex items-center gap-2 flex-1">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSpeed(Math.max(0.25, speed - 0.25))}
-              className="gap-2"
-              disabled={isPlaying}
-            >
-              <Minus className="w-4 h-4" />
-            </Button>
-            <div className="flex-1 max-w-xs h-2 bg-secondary rounded-full">
-              <div
-                className="h-full bg-gradient-to-r from-primary to-primary/70 rounded-full transition-all"
-                style={{ width: `${(speed / 2) * 100}%` }}
-              />
-            </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setSpeed(Math.min(2, speed + 0.25))}
-              className="gap-2"
-              disabled={isPlaying}
-            >
-              <Plus className="w-4 h-4" />
-            </Button>
-            <span className="text-xs font-mono text-muted-foreground w-10 text-right">{speed.toFixed(2)}x</span>
-          </div>
-        </div>
-
-        {/* Info */}
-        <div className="text-xs text-muted-foreground bg-primary/5 dark:bg-primary/10 rounded-lg p-3 border border-primary/20">
-          Use Play/Pause to watch the algorithm execute, or Step to go through it manually. Adjust speed for better
-          comprehension.
-        </div>
-      </div>
     </Card>
   )
 }

@@ -10,68 +10,160 @@ interface BarState {
 export function QuickSortVisualizer() {
   const [bars, setBars] = useState<BarState[]>([])
   const [isRunning, setIsRunning] = useState(false)
-  const [comparing, setComparing] = useState<number[]>([])
-  const [sorted, setSorted] = useState<number[]>([])
+  const [manual, setManual] = useState("")
+  const [speed, setSpeed] = useState(200)
 
-  // Initialize array
   useEffect(() => {
+    generateRandom()
+  }, [])
+
+  const generateRandom = () => {
+    if (isRunning) return
     const initialBars = Array.from({ length: 10 }, () => ({
-      value: Math.floor(Math.random() * 100) + 10,
+      value: Math.floor(Math.random() * 90) + 10,
       state: "default" as const,
     }))
     setBars(initialBars)
-  }, [])
+  }
+
+  const applyManualArray = () => {
+    if (isRunning) return
+    if (!manual.trim()) return
+
+    const nums = manual
+      .split(",")
+      .map((n) => Number(n.trim()))
+      .filter((n) => !isNaN(n))
+
+    if (nums.length === 0) return
+
+    setBars(nums.map((n) => ({ value: n, state: "default" })))
+  }
+
+  const delay = (ms: number) => new Promise((res) => setTimeout(res, ms))
 
   const performQuickSort = async () => {
+    if (isRunning) return
     setIsRunning(true)
-    const arr = [...bars.map((b) => b.value)]
 
-    const quickSort = async (low: number, high: number) => {
-      if (low < high) {
-        const pi = await partition(arr, low, high)
-        await quickSort(low, pi - 1)
-        await quickSort(pi + 1, high)
-      }
+    let arr = bars.map((b) => ({ ...b }))
+
+    const swap = async (i: number, j: number) => {
+      const t = { ...arr[i] }
+      arr[i] = { ...arr[j] }
+      arr[j] = t
+      setBars([...arr])
+      await delay(speed)
     }
 
-    const partition = async (arr: number[], low: number, high: number) => {
-      const pivot = arr[high]
+    const partition = async (low: number, high: number) => {
+      const pivotValue = arr[high].value
+      arr[high].state = "pivot"
+      setBars([...arr])
+      await delay(speed)
+
       let i = low - 1
 
       for (let j = low; j < high; j++) {
-        setComparing([j, high])
-        await new Promise((resolve) => setTimeout(resolve, 200))
+        arr[j].state = "comparing"
+        setBars([...arr])
+        await delay(speed)
 
-        if (arr[j] < pivot) {
+        if (arr[j].value < pivotValue) {
           i++
-          ;[arr[i], arr[j]] = [arr[j], arr[i]]
-          setBars(arr.map((v) => ({ value: v, state: "default" })))
+          await swap(i, j)
         }
+
+        arr[j].state = "default"
       }
-      ;[arr[i + 1], arr[high]] = [arr[high], arr[i + 1]]
-      setBars(arr.map((v) => ({ value: v, state: "default" })))
+
+      await swap(i + 1, high)
+
+      arr[i + 1].state = "sorted"
+      setBars([...arr])
+      await delay(speed)
+
       return i + 1
     }
 
+    const quickSort = async (low: number, high: number) => {
+      if (low < high) {
+        const pi = await partition(low, high)
+        await quickSort(low, pi - 1)
+        await quickSort(pi + 1, high)
+      } else if (low === high) {
+        arr[low].state = "sorted"
+        setBars([...arr])
+        await delay(speed)
+      }
+    }
+
     await quickSort(0, arr.length - 1)
-    setSorted(Array.from({ length: arr.length }, (_, i) => i))
-    setComparing([])
+
+    setBars([...arr])
     setIsRunning(false)
   }
 
   return (
-    <div className="w-full space-y-6">
-      <div className="flex items-end justify-center gap-2 h-48">
+    <div className="w-full space-y-6 pb-10">
+      <div className="flex justify-center gap-2">
+        <input
+          type="text"
+          value={manual}
+          onChange={(e) => setManual(e.target.value)}
+          placeholder="40, 20, 85, 10"
+          disabled={isRunning}
+          className="border px-3 py-1 rounded w-64"
+        />
+        <button
+          onClick={applyManualArray}
+          disabled={isRunning}
+          className="px-4 py-1 bg-blue-500 text-white rounded"
+        >
+          Set Array
+        </button>
+        <button
+          onClick={generateRandom}
+          disabled={isRunning}
+          className="px-4 py-1 bg-gray-700 text-white rounded"
+        >
+          Random
+        </button>
+      </div>
+
+      <div className="flex justify-center gap-4">
+        <label className="text-sm">Speed</label>
+        <input
+          type="range"
+          min={50}
+          max={800}
+          value={speed}
+          onChange={(e) => setSpeed(Number(e.target.value))}
+          disabled={isRunning}
+        />
+      </div>
+
+      <div className="flex items-end justify-center gap-2 h-56">
         {bars.map((bar, i) => (
           <div
             key={i}
-            className="rounded-t transition-all duration-100"
+            className="rounded-t transition-all duration-300 ease-in-out flex items-end justify-center relative"
             style={{
               height: `${(bar.value / 120) * 100}%`,
-              width: "30px",
-              backgroundColor: sorted.includes(i) ? "#22c55e" : comparing.includes(i) ? "#ef4444" : "#0ea5e9",
+              width: "32px",
+              backgroundColor:
+                bar.state === "sorted"
+                  ? "#22c55e"
+                  : bar.state === "pivot"
+                  ? "#eab308"
+                  : bar.state === "comparing"
+                  ? "#ef4444"
+                  : "#0ea5e9",
+              transform: bar.state === "pivot" ? "scaleY(1.1)" : "scaleY(1)",
             }}
-          />
+          >
+            <span className="absolute -top-5 text-xs">{bar.value}</span>
+          </div>
         ))}
       </div>
 
@@ -79,7 +171,7 @@ export function QuickSortVisualizer() {
         <button
           onClick={performQuickSort}
           disabled={isRunning}
-          className="px-6 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 disabled:opacity-50"
+          className="px-6 py-2 bg-primary text-primary-foreground rounded disabled:opacity-50"
         >
           {isRunning ? "Sorting..." : "Start Sorting"}
         </button>
